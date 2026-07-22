@@ -1,0 +1,78 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    name: Check library
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    - name: Check library
+      run: |
+        cargo check --all-targets
+        cargo check --all-features --all-targets
+
+  build-no-std:
+    name: Check library (no-std)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        target: x86_64-unknown-linux-gnu
+        override: true
+    - name: Check library (no-std)
+      run: |
+        cargo check
+        cargo check --all-features
+
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    - name: Run tests
+      run: cargo test
+    - name: Run tests with all features
+      run: cargo test --all-features
+
+  clippy:
+    name: Run clippy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+        components: "clippy"
+    - name: Run clippy
+      run: cargo clippy --all-targets -- -D warnings
+
+  fmt:
+    name: Run rustfmt
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+        components: "rustfmt"
+    - name: Run rustfmt
+      run: cargo fmt -- --check
