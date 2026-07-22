@@ -245,8 +245,8 @@ impl<'a> ConfigValueMut<'a> {
 impl<'a> Display for ConfigValueMut<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Bool(value) => write!(f, "{}", value),
-            Self::U8(value) => write!(f, "{}", value),
+            Self::Bool(value) => write!(f, "{value}"),
+            Self::U8(value) => write!(f, "{value}"),
         }
     }
 }
@@ -281,7 +281,7 @@ pub fn get<C: Config>(
     response: &mut VecView<u8>,
 ) -> Result<(), ConfigError> {
     let field = config.field(key).ok_or(ConfigError::InvalidKey)?;
-    write!(response, "{}", field).map_err(|_| ConfigError::DataTooLong)
+    write!(response, "{field}").map_err(|_| ConfigError::DataTooLong)
 }
 
 pub fn set<C: Config>(config: &mut C, key: &str, value: &str) -> Result<(), ConfigError> {
