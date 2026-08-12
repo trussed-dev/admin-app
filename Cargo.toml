@@ -12,7 +12,7 @@ apdu-app = "0.2"
 cbor-smol = { version = "0.5.0", features = ["heapless-v0-9", "heapless-bytes-v0-5"] }
 ctaphid-app = "0.2"
 delog = "0.1"
-heapless = "0.9"
+heapless = { version = "0.9", features = ["serde"] }
 heapless-bytes = { version = "0.5", features = ["heapless-0.9"] }
 iso7816 = "0.2"
 littlefs2 = { version = "0.8", optional = true }

@@ -5,7 +5,7 @@ use core::{
 };
 
 use cbor_smol::{cbor_deserialize, cbor_serialize_to};
-use heapless::VecView;
+use heapless::{string::StringView, VecView};
 use littlefs2_core::{path, Path};
 use serde::{de::DeserializeOwned, Serialize};
 use strum_macros::FromRepr;
@@ -175,11 +175,17 @@ pub trait Config: Default + PartialEq + DeserializeOwned + Serialize {
 }
 
 // No need to rename, cbor-smol already packs enum using ids
+//
+// As the variants are serialized as their index, new variants may only be appended
 #[derive(Serialize)]
 #[non_exhaustive]
 pub enum FieldType {
     Bool,
     U8,
+    /// A UTF-8 string
+    ///
+    /// The maximum length is defined by the config struct holding the value, not by this type
+    String,
 }
 
 #[derive(Serialize)]
@@ -226,6 +232,8 @@ impl Config for () {
 pub enum ConfigValueMut<'a> {
     Bool(&'a mut bool),
     U8(&'a mut u8),
+    /// A string of any capacity, obtained from a `heapless::String<N>` with `as_mut_view`
+    String(&'a mut StringView),
 }
 
 impl<'a> ConfigValueMut<'a> {
@@ -238,6 +246,15 @@ impl<'a> ConfigValueMut<'a> {
         match self {
             Self::Bool(r) => set_value(*r, value),
             Self::U8(r) => set_value(*r, value),
+            Self::String(r) => {
+                // Check the capacity before clearing so that a rejected value leaves the stored
+                // one intact
+                if value.len() > r.capacity() {
+                    return Err(ConfigError::DataTooLong);
+                }
+                r.clear();
+                r.push_str(value).map_err(|_| ConfigError::DataTooLong)
+            }
         }
     }
 }
@@ -247,6 +264,7 @@ impl<'a> Display for ConfigValueMut<'a> {
         match self {
             Self::Bool(value) => write!(f, "{value}"),
             Self::U8(value) => write!(f, "{value}"),
+            Self::String(value) => f.write_str(value),
         }
     }
 }
@@ -379,5 +397,103 @@ mod tests {
             &bytes,
             &hex!("81A5616E69746573745F6E616D656163F56172F46164F5617400")
         );
+    }
+
+    // The field types are parsed as integers by the hosts, so their values may never change
+    #[test]
+    fn field_type_ids() {
+        for (ty, id) in [
+            (FieldType::Bool, hex!("00").as_slice()),
+            (FieldType::U8, hex!("01").as_slice()),
+            (FieldType::String, hex!("02").as_slice()),
+        ] {
+            let mut bytes: heapless::Vec<u8, 8> = Default::default();
+            cbor_smol::cbor_serialize_to(&ty, &mut bytes).unwrap();
+            assert_eq!(bytes.as_slice(), id);
+        }
+    }
+
+    #[derive(Default, PartialEq, serde::Deserialize, serde::Serialize)]
+    struct TestConfig {
+        label: heapless::String<8>,
+    }
+
+    impl Config for TestConfig {
+        fn field(&mut self, key: &str) -> Option<ConfigValueMut<'_>> {
+            match key {
+                "label" => Some(ConfigValueMut::String(self.label.as_mut_view())),
+                _ => None,
+            }
+        }
+
+        fn migration_version(&self) -> Option<u32> {
+            None
+        }
+
+        fn set_migration_version(&mut self, _version: u32) -> bool {
+            false
+        }
+
+        fn list_available_fields(&self) -> &'static [ConfigField] {
+            &[]
+        }
+    }
+
+    fn get_field(config: &mut TestConfig, key: &str) -> Result<heapless::String<32>, ConfigError> {
+        let mut response: heapless::Vec<u8, 32> = Default::default();
+        get(config, key, response.as_mut_view())?;
+        Ok(core::str::from_utf8(&response).unwrap().try_into().unwrap())
+    }
+
+    #[test]
+    fn string_field() {
+        let mut config = TestConfig::default();
+        assert_eq!(get_field(&mut config, "label").unwrap(), "");
+
+        set(&mut config, "label", "Backup").unwrap();
+        assert_eq!(config.label, "Backup");
+        assert_eq!(get_field(&mut config, "label").unwrap(), "Backup");
+
+        set(&mut config, "label", "12345678").unwrap();
+        assert_eq!(config.label, "12345678");
+        set(&mut config, "label", "").unwrap();
+        assert_eq!(config.label, "");
+    }
+
+    #[test]
+    fn string_field_too_long() {
+        let mut config = TestConfig::default();
+        set(&mut config, "label", "old").unwrap();
+
+        let error = set(&mut config, "label", "123456789").unwrap_err();
+        assert!(matches!(error, ConfigError::DataTooLong), "{error:?}");
+        // A rejected value must not destroy the stored one
+        assert_eq!(config.label, "old");
+    }
+
+    // The firmware stores arbitrary UTF-8, clients sanitize the value before displaying it
+    #[test]
+    fn string_field_arbitrary_utf8() {
+        let mut config = TestConfig::default();
+
+        for value in ["a\nb", "\x1b[2J", "\u{202e}", "\u{2028}", "עבר"] {
+            set(&mut config, "label", value).unwrap_or_else(|e| panic!("{value:?}: {e:?}"));
+            assert_eq!(config.label, value);
+        }
+    }
+
+    // Values are bounded by their length in bytes, not in characters
+    #[test]
+    fn string_field_multibyte() {
+        let mut config = TestConfig::default();
+
+        // The capacity is 8 bytes: two 4-byte characters fit, three 3-byte ones do not
+        set(&mut config, "label", "🔑🔑").unwrap();
+        assert_eq!(config.label, "🔑🔑");
+        assert_eq!(config.label.len(), 8);
+
+        let error = set(&mut config, "label", "中中中").unwrap_err();
+        assert!(matches!(error, ConfigError::DataTooLong), "{error:?}");
+        assert_eq!(config.label, "🔑🔑");
     }
 }
