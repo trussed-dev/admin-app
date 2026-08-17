@@ -229,6 +229,7 @@ impl Config for () {
 }
 
 #[derive(Debug, Serialize)]
+#[non_exhaustive]
 pub enum ConfigValueMut<'a> {
     Bool(&'a mut bool),
     U8(&'a mut u8),
