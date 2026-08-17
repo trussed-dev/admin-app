@@ -6,7 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-[Unreleased]: https://github.com/trussed-dev/admin-app/compare/0.2.0...HEAD
+[Unreleased]: https://github.com/trussed-dev/admin-app/compare/0.3.0...HEAD
+
+-
+
+## [0.3.0] 2026-08-17
+
+[0.3.0]: https://github.com/trussed-dev/admin-app/compare/0.2.0...0.3.0
 
 - Add support for string config fields.
 - Make `ConfigValueMut` non-exhaustive.
