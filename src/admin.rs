@@ -170,7 +170,7 @@ pub trait Reboot {
     /// Presuming the device has a separate mode of operation that
     /// allows updating its firmware (for instance, a bootloader),
     /// reboots the device into this mode.
-    fn reboot_to_firmware_update() -> !;
+    fn reboot_to_firmware_update();
 
     /// Reboots the device.
     ///
