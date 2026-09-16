@@ -1,7 +1,7 @@
 use super::Client as TrussedClient;
 use apdu_app::{CommandView, Interface};
 use cbor_smol::{cbor_deserialize, cbor_serialize_to};
-use core::{convert::TryInto, marker::PhantomData, time::Duration};
+use core::{convert::TryInto, time::Duration};
 use ctaphid_app::{self as hid, Command as HidCommand, VendorCommand};
 use heapless::VecView;
 use heapless_bytes::BytesView;
@@ -161,29 +161,6 @@ struct SetConfigRequest<'a> {
     value: &'a str,
 }
 
-pub trait Reboot {
-    /// Reboots the device.
-    fn reboot() -> !;
-
-    /// Reboots the device.
-    ///
-    /// Presuming the device has a separate mode of operation that
-    /// allows updating its firmware (for instance, a bootloader),
-    /// reboots the device into this mode.
-    fn reboot_to_firmware_update();
-
-    /// Reboots the device.
-    ///
-    /// Presuming the device has a separate destructive but more
-    /// reliable way of rebooting into the firmware mode of operation,
-    /// does so.
-    fn reboot_to_firmware_update_destructive() -> !;
-
-    /// Is device bootloader locked down?
-    /// E.g., is secure boot enabled?
-    fn locked() -> bool;
-}
-
 /// Trait indicating that a value can be used as a status
 pub trait StatusBytes {
     type Serialized: AsRef<[u8]>;
@@ -201,20 +178,35 @@ pub struct Data {
     pub version: u32,
     pub full_version: &'static str,
     pub migrations: &'static [Migrator],
+    /// Reboots the device.
+    pub reboot: fn() -> !,
+    /// Reboots the device.
+    ///
+    /// Presuming the device has a separate mode of operation that
+    /// allows updating its firmware (for instance, a bootloader),
+    /// reboots the device into this mode.
+    pub reboot_to_firmware_update: fn(),
+    /// Reboots the device.
+    ///
+    /// Presuming the device has a separate destructive but more
+    /// reliable way of rebooting into the firmware mode of operation,
+    /// does so.
+    pub reboot_to_firmware_update_destructive: fn() -> !,
+    /// Is device bootloader locked down?
+    /// E.g., is secure boot enabled?
+    pub locked: fn() -> bool,
 }
 
-pub struct App<T, R, S, C = ()> {
+pub struct App<T, S, C = ()> {
     trussed: T,
     data: Data,
     status: S,
-    boot_interface: PhantomData<R>,
     config: C,
 }
 
-impl<T, R, S, C> App<T, R, S, C>
+impl<T, S, C> App<T, S, C>
 where
     T: TrussedClient,
-    R: Reboot,
     S: StatusBytes,
     C: Config,
 {
@@ -285,7 +277,6 @@ where
             trussed: client,
             data,
             status,
-            boot_interface: PhantomData,
             config,
         }
     }
@@ -321,9 +312,9 @@ where
     ) -> Result<(), Error> {
         debug_now!("Executing command: {command:?}");
         match command {
-            Command::Reboot => R::reboot(),
+            Command::Reboot => (self.data.reboot)(),
             Command::Locked => {
-                response.push(R::locked().into()).ok();
+                response.push((self.data.locked)().into()).ok();
             }
             Command::Rng => {
                 // Fill the HID packet (57 bytes)
@@ -334,9 +325,9 @@ where
             Command::Update => {
                 if self.user_present() {
                     if input.first().copied() == Some(0x01) {
-                        R::reboot_to_firmware_update_destructive();
+                        (self.data.reboot_to_firmware_update_destructive)();
                     } else {
-                        R::reboot_to_firmware_update();
+                        (self.data.reboot_to_firmware_update)();
                     }
                 } else {
                     return Err(Error::NotAvailable);
@@ -416,7 +407,7 @@ where
                     return Ok(());
                 }
                 syscall!(self.trussed.factory_reset_device());
-                R::reboot();
+                (self.data.reboot)();
             }
             #[cfg(feature = "factory-reset")]
             Command::FactoryResetApp => {
@@ -502,10 +493,9 @@ where
     }
 }
 
-impl<T, R, S, C> hid::App<'static> for App<T, R, S, C>
+impl<T, S, C> hid::App<'static> for App<T, S, C>
 where
     T: TrussedClient,
-    R: Reboot,
     S: StatusBytes,
     C: Config,
 {
@@ -546,10 +536,9 @@ where
     }
 }
 
-impl<T, R, S, C> iso7816::App for App<T, R, S, C>
+impl<T, S, C> iso7816::App for App<T, S, C>
 where
     T: TrussedClient,
-    R: Reboot,
     S: StatusBytes,
 {
     // Solo management app
@@ -558,10 +547,9 @@ where
     }
 }
 
-impl<T, R, S, C> apdu_app::App for App<T, R, S, C>
+impl<T, S, C> apdu_app::App for App<T, S, C>
 where
     T: TrussedClient,
-    R: Reboot,
     S: StatusBytes,
     C: Config,
 {
