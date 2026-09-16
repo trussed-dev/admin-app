@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Make `Reboot::reboot_to_firmware_update` non-diverging.
 - Add `Data` struct and change `App::load_config` and `App::with_default_config` to use it.
 - Replace `Reboot` trait with function pointers in `Data`.
+- Make destructive reboot to firmware update optional.
 
 ## [0.3.0] 2026-08-17
 

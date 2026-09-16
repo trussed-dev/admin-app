@@ -191,7 +191,7 @@ pub struct Data {
     /// Presuming the device has a separate destructive but more
     /// reliable way of rebooting into the firmware mode of operation,
     /// does so.
-    pub reboot_to_firmware_update_destructive: fn() -> !,
+    pub reboot_to_firmware_update_destructive: Option<fn() -> !>,
     /// Is device bootloader locked down?
     /// E.g., is secure boot enabled?
     pub locked: fn() -> bool,
@@ -325,7 +325,11 @@ where
             Command::Update => {
                 if self.user_present() {
                     if input.first().copied() == Some(0x01) {
-                        (self.data.reboot_to_firmware_update_destructive)();
+                        if let Some(f) = self.data.reboot_to_firmware_update_destructive {
+                            f();
+                        } else {
+                            return Err(Error::UnsupportedCommand);
+                        }
                     } else {
                         (self.data.reboot_to_firmware_update)();
                     }
