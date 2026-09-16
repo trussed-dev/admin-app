@@ -195,15 +195,20 @@ pub trait StatusBytes {
     fn serialize(&self) -> Self::Serialized;
 }
 
+#[derive(Clone, Copy)]
+pub struct Data {
+    pub uuid: [u8; 16],
+    pub version: u32,
+    pub full_version: &'static str,
+    pub migrations: &'static [Migrator],
+}
+
 pub struct App<T, R, S, C = ()> {
     trussed: T,
-    uuid: [u8; 16],
-    version: u32,
-    full_version: &'static str,
+    data: Data,
     status: S,
     boot_interface: PhantomData<R>,
     config: C,
-    migrations: &'static [Migrator],
 }
 
 impl<T, R, S, C> App<T, R, S, C>
@@ -217,22 +222,11 @@ where
     pub fn load_config<F: Filestore>(
         client: T,
         filestore: &mut F,
-        uuid: [u8; 16],
-        version: u32,
-        full_version: &'static str,
+        data: Data,
         status: S,
-        migrations: &'static [Migrator],
     ) -> Result<Self, (T, ConfigError)> {
         match config::load(filestore) {
-            Ok(config) => Ok(Self::new(
-                client,
-                uuid,
-                version,
-                full_version,
-                status,
-                config,
-                migrations,
-            )),
+            Ok(config) => Ok(Self::new(client, data, status, config)),
             Err(err) => {
                 error!("failed to load configuration: {:?}", err);
                 Err((client, err))
@@ -262,7 +256,7 @@ where
         let internal = store.ifs();
         let external = store.efs();
 
-        for migration in self.migrations {
+        for migration in self.data.migrations {
             if migration.version > current_version && migration.version <= to_version {
                 (migration.migrate)(internal, external).map_err(|_err| {
                     error_now!("Migration failed: {_err:?}");
@@ -282,43 +276,17 @@ where
     ///
     /// This is only intended for debugging, testing and example code.  In production,
     /// [`App::load_config`][] should be used.
-    pub fn with_default_config(
-        client: T,
-        uuid: [u8; 16],
-        version: u32,
-        full_version: &'static str,
-        status: S,
-        migrations: &'static [Migrator],
-    ) -> Self {
-        Self::new(
-            client,
-            uuid,
-            version,
-            full_version,
-            status,
-            Default::default(),
-            migrations,
-        )
+    pub fn with_default_config(client: T, data: Data, status: S) -> Self {
+        Self::new(client, data, status, Default::default())
     }
 
-    fn new(
-        client: T,
-        uuid: [u8; 16],
-        version: u32,
-        full_version: &'static str,
-        status: S,
-        config: C,
-        migrations: &'static [Migrator],
-    ) -> Self {
+    fn new(client: T, data: Data, status: S, config: C) -> Self {
         Self {
             trussed: client,
-            uuid,
-            version,
-            full_version,
+            data,
             status,
             boot_interface: PhantomData,
             config,
-            migrations,
         }
     }
 
@@ -376,16 +344,18 @@ where
             }
             Command::Uuid => {
                 // Get UUID
-                response.extend_from_slice(&self.uuid).ok();
+                response.extend_from_slice(&self.data.uuid).ok();
             }
             Command::Version => {
                 // GET VERSION
                 if input.first().copied() == Some(0x01) {
                     response
-                        .extend_from_slice(self.full_version.as_bytes())
+                        .extend_from_slice(self.data.full_version.as_bytes())
                         .ok();
                 } else {
-                    response.extend_from_slice(&self.version.to_be_bytes()).ok();
+                    response
+                        .extend_from_slice(&self.data.version.to_be_bytes())
+                        .ok();
                 }
             }
             Command::Wink => {

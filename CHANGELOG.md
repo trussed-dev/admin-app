@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [Unreleased]: https://github.com/trussed-dev/admin-app/compare/0.3.0...HEAD
 
 - Make `Reboot::reboot_to_firmware_update` non-diverging.
+- Add `Data` struct and change `App::load_config` and `App::with_default_config` to use it.
 
 ## [0.3.0] 2026-08-17
 
