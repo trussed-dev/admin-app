@@ -17,10 +17,7 @@ mod config;
 pub mod migrations;
 
 pub use admin::{App, Data, StatusBytes};
-pub use config::{
-    Config, ConfigError, ConfigField, ConfigValueMut, FieldType, ResetConfigResult, ResetSignal,
-    ResetSignalAllocation,
-};
+pub use config::{Config, ConfigError, ConfigField, ConfigValueMut, FieldType, ResetConfigResult};
 use trussed_manage::ManageClient;
 #[cfg(feature = "se050")]
 use trussed_se050_manage::Se050ManageClient;
