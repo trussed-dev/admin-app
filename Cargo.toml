@@ -19,7 +19,7 @@ littlefs2 = { version = "0.8", optional = true }
 littlefs2-core = { version = "0.1", features = ["heapless-bytes05"] }
 serde = { version = "1.0.180", default-features = false }
 trussed = { version = "0.2", default-features = false }
-trussed-core = { version = "0.2", features = ["crypto-client", "filesystem-client", "management-client", "ui-client"] }
+trussed-core = { version = "0.2.3", features = ["crypto-client", "filesystem-client", "management-client", "ui-client"] }
 
 embedded-hal = { version = "0.2.7", optional = true }
 hex-literal = "0.4.1"
@@ -42,6 +42,3 @@ log-error = []
 
 # Utils to test migration
 migration-tests = ["dep:littlefs2"]
-
-[patch.crates-io]
-trussed-core = { git = "https://github.com/trussed-dev/trussed.git", rev = "bc01fd6728f3b1efef2eb12adcce5acff558f6bb"}
